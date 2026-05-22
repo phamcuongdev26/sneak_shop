@@ -9,12 +9,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import sneak_shop.enums.Role;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -51,7 +49,7 @@ public class UserEntity {
 	private Instant createdAt = Instant.now();
 
 
-	public UserEntity(String fullName, String phoneNumber, String password, Set<Role> roles) {
+	public UserEntity(String fullName, String phoneNumber, String password, Set<RoleEntity> roles) {
 		this.fullName = fullName;
 		this.phoneNumber = phoneNumber;
 		this.password = password;
@@ -59,21 +57,40 @@ public class UserEntity {
 	}
 
 	public Set<SimpleGrantedAuthority> getAuthorities() {
-		return getRoles().stream()
-				.flatMap(role -> role.getAuthorities().stream())
+		Set<SimpleGrantedAuthority> authorities = getPermissions().stream()
+				.map(SimpleGrantedAuthority::new)
 				.collect(Collectors.toSet());
+
+		getRoles().stream()
+				.map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+				.forEach(authorities::add);
+
+		return authorities;
 	}
 
-	public Set<Role> getRoles() {
+	public Set<String> getRoles() {
 		return userRoles.stream()
 				.map(UserRoleEntity::getRole)
+				.map(RoleEntity::getName)
 				.collect(Collectors.toSet());
 	}
 
-	public void addRole(Role role) {
-		userRoles.add(UserRoleEntity.builder()
-				.user(this)
-				.role(role)
-				.build());
+	public Set<String> getPermissions() {
+		return userRoles.stream()
+				.map(UserRoleEntity::getRole)
+				.flatMap(role -> role.getPermissions().stream())
+				.collect(Collectors.toSet());
+	}
+
+	public void addRole(RoleEntity role) {
+		boolean exists = userRoles.stream()
+				.anyMatch(userRole -> userRole.getRole().getName().equals(role.getName()));
+
+		if (!exists) {
+			userRoles.add(UserRoleEntity.builder()
+					.user(this)
+					.role(role)
+					.build());
+		}
 	}
 }

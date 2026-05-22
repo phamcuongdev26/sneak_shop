@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import sneak_shop.enums.Role;
 
 @Getter
 @Setter
@@ -14,7 +13,10 @@ import sneak_shop.enums.Role;
 @AllArgsConstructor
 @Entity
 @Builder
-@Table(name = "user_roles")
+@Table(
+        name = "user_roles",
+        uniqueConstraints = @UniqueConstraint(name = "uk_user_roles_user_id_role_id", columnNames = {"user_id", "role_id"})
+)
 public class UserRoleEntity {
 
     @Id
@@ -25,7 +27,7 @@ public class UserRoleEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
-    private Role role;
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "role_id", nullable = false)
+    private RoleEntity role;
 }

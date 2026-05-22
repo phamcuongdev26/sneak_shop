@@ -5,7 +5,7 @@ import sneak_shop.entity.UserEntity;
 
 import java.util.Optional;
 
-public interface UserRepository extends JpaRepository<UserEntity, Long> {
+public interface UserRepository extends JpaRepository<UserEntity, String> {
 
 	Optional<UserEntity> findByPhoneNumber(String phoneNumber);
 

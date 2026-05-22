@@ -13,3 +13,8 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+app:
+  jwt:
+    secret: "sneak-shop-local-development-secret-key-change-me"
+    expiration-minutes: 1440
