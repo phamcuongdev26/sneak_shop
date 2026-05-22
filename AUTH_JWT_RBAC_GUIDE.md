@@ -510,22 +510,23 @@ Project co `GlobalExceptionHandler` xu ly loi theo format thong nhat:
 
 Loi auth/JWT trong filter duoc tra truc tiep bang JSON vi loi xay ra truoc controller.
 
-## 12. Tai khoan seed mac dinh
+## 12. Du lieu seed mac dinh
 
-Trong `SecurityConfig`, co seed 3 user neu database chua co:
+Trong `SecurityConfig`, he thong seed:
+
+- Role mac dinh: `ADMIN`, `STAFF`, `CUSTOMER`
+- Permission mac dinh
+- Mapping `role_permissions`
+- 1 user admin mac dinh neu database chua co
 
 ```text
-Admin    - 0900000001 / admin123
-Staff    - 0900000002 / staff123
-Customer - 0900000003 / customer123
+Admin - 0900000001 / admin123
 ```
 
-Moi user duoc gan role tuong ung:
+User admin duoc gan role:
 
 ```text
-Admin    -> ADMIN
-Staff    -> STAFF
-Customer -> CUSTOMER
+Admin -> ADMIN
 ```
 
 ## 13. Test nhanh bang curl

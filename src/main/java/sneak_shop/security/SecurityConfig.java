@@ -81,12 +81,8 @@ public class SecurityConfig {
 			seedRolesAndPermissions(roleRepository, permissionRepository);
 
 			RoleEntity adminRole = roleRepository.findByName("ADMIN").orElseThrow();
-			RoleEntity staffRole = roleRepository.findByName("STAFF").orElseThrow();
-			RoleEntity customerRole = roleRepository.findByName("CUSTOMER").orElseThrow();
 
 			createDefaultUser(userRepository, passwordEncoder, "Admin", "0900000001", "admin123", Set.of(adminRole));
-			createDefaultUser(userRepository, passwordEncoder, "Staff", "0900000002", "staff123", Set.of(staffRole));
-			createDefaultUser(userRepository, passwordEncoder, "Customer", "0900000003", "customer123", Set.of(customerRole));
 		};
 	}
 
