@@ -15,6 +15,7 @@ import { addressesApi } from "@/lib/api/addresses";
 import { formatVND } from "@/lib/format";
 import { vnRegions } from "@/lib/vn-regions";
 import type { Province, District, Ward } from "@/lib/vn-regions";
+import type { Address } from "@/lib/types";
 
 type BuyNowItem = {
   productId: number;
@@ -43,6 +44,8 @@ export default function CheckoutPage() {
   const [provinceName, setProvinceName] = useState("");
   const [districtName, setDistrictName] = useState("");
   const [regionsLoading, setRegionsLoading] = useState(false);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
 
   const [form, setForm] = useState({
     recipientName: "",
@@ -70,7 +73,117 @@ export default function CheckoutPage() {
       .finally(() => setRegionsLoading(false));
   }, [user]);
 
+  useEffect(() => {
+    if (!user || provinces.length === 0) return;
+    let alive = true;
+
+    const applySavedAddress = async (addr: Address) => {
+      const provinceCode = addr.provinceCode ?? provinces.find((p) => p.name === addr.city)?.code ?? null;
+      const districtCode = addr.districtCode ?? null;
+
+      setForm((f) => ({
+        ...f,
+        recipientName: addr.recipientName || f.recipientName,
+        recipientPhone: addr.recipientPhone || f.recipientPhone,
+      }));
+      setAddressForm((f) => ({
+        ...f,
+        address: addr.address,
+        provinceCode,
+        districtCode,
+        ward: addr.ward ?? "",
+        district: addr.district ?? "",
+        city: addr.city,
+        isDefault: addr.isDefault,
+      }));
+      setProvinceCode(provinceCode);
+      setProvinceName(addr.city);
+      setDistrictCode(districtCode);
+      setDistrictName(addr.district ?? "");
+      setSelectedAddressId(addr.id);
+
+      if (provinceCode != null) {
+        const dists = await vnRegions.districts(provinceCode);
+        if (!alive) return;
+        setDistricts(dists);
+
+        const resolvedDistrictCode =
+          districtCode ?? dists.find((d) => d.name === addr.district)?.code ?? null;
+        setDistrictCode(resolvedDistrictCode);
+        if (resolvedDistrictCode != null) {
+          const ws = await vnRegions.wards(resolvedDistrictCode);
+          if (!alive) return;
+          setWards(ws);
+        }
+      }
+    };
+
+    const loadSavedAddresses = async () => {
+      try {
+        const r = await addressesApi.getAll();
+        const list = r.data.result;
+        setSavedAddresses(list);
+        const addr = list.find((a) => a.isDefault) ?? list[0];
+        if (!addr || !alive) return;
+        await applySavedAddress(addr);
+      } catch {
+        // keep manual entry fallback
+      }
+    };
+
+    void loadSavedAddresses();
+    return () => {
+      alive = false;
+    };
+  }, [user, provinces]);
+
+  const handleSelectSavedAddress = async (addr: Address) => {
+    const provinceCode = addr.provinceCode ?? provinces.find((p) => p.name === addr.city)?.code ?? null;
+    const districtCode = addr.districtCode ?? null;
+
+    setForm((f) => ({
+      ...f,
+      recipientName: addr.recipientName || f.recipientName,
+      recipientPhone: addr.recipientPhone || f.recipientPhone,
+    }));
+    setAddressForm((f) => ({
+      ...f,
+      address: addr.address,
+      provinceCode,
+      districtCode,
+      ward: addr.ward ?? "",
+      district: addr.district ?? "",
+      city: addr.city,
+      isDefault: addr.isDefault,
+    }));
+    setProvinceCode(provinceCode);
+    setProvinceName(addr.city);
+    setDistrictCode(districtCode);
+    setDistrictName(addr.district ?? "");
+    setSelectedAddressId(addr.id);
+
+    if (provinceCode != null) {
+      try {
+        const dists = await vnRegions.districts(provinceCode);
+        setDistricts(dists);
+
+        const resolvedDistrictCode =
+          districtCode ?? dists.find((d) => d.name === addr.district)?.code ?? null;
+        setDistrictCode(resolvedDistrictCode);
+        if (resolvedDistrictCode != null) {
+          const ws = await vnRegions.wards(resolvedDistrictCode);
+          setWards(ws);
+        } else {
+          setWards([]);
+        }
+      } catch {
+        toast.error("Không tải được dữ liệu địa chỉ");
+      }
+    }
+  };
+
   const handleProvinceChange = async (code: number, name: string) => {
+    setSelectedAddressId(null);
     setProvinceCode(code);
     setProvinceName(name);
     setDistrictName("");
@@ -88,6 +201,7 @@ export default function CheckoutPage() {
   };
 
   const handleDistrictChange = async (code: number, name: string) => {
+    setSelectedAddressId(null);
     setDistrictCode(code);
     setDistrictName(name);
     setAddressForm((f) => ({ ...f, districtCode: code, district: name, ward: "" }));
@@ -135,6 +249,7 @@ export default function CheckoutPage() {
       setDistrictName("");
       setDistricts([]);
       setWards([]);
+      setSelectedAddressId(null);
       toast.success("Đã thêm địa chỉ");
     } catch (err: unknown) {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Có lỗi xảy ra");
@@ -180,7 +295,7 @@ export default function CheckoutPage() {
       router.push("/cart");
       return;
     }
-    setForm((f) => ({
+      setForm((f) => ({
       ...f,
       recipientName: f.recipientName || user.fullName || "",
       recipientPhone: f.recipientPhone || user.phone || "",
@@ -188,7 +303,12 @@ export default function CheckoutPage() {
   }, [ready, user, items.length, buyNowItems.length, router]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+    setForm((f) => {
+      if (k === "recipientName" || k === "recipientPhone") {
+        setSelectedAddressId(null);
+      }
+      return { ...f, [k]: e.target.value };
+    });
 
   const checkoutItems = buyNowItems.length > 0
     ? buyNowItems.map((item) => ({
@@ -220,7 +340,7 @@ export default function CheckoutPage() {
         recipientPhone: form.recipientPhone,
         shippingAddress: `${addressForm.address}, ${addressForm.ward}, ${addressForm.district}, ${addressForm.city}`,
         shippingCity: addressForm.city,
-        addressId: undefined,
+        addressId: selectedAddressId ?? undefined,
         paymentMethod: form.paymentMethod,
         note: form.note,
         items: isBuyNow
@@ -268,20 +388,61 @@ export default function CheckoutPage() {
             <div className="bg-white border rounded-xl p-5">
               <h2 className="font-bold text-lg mb-4">Thông tin giao hàng</h2>
               <div className="space-y-4">
+                {savedAddresses.length > 1 && (
+                  <div className="space-y-2">
+                    <Label>Địa chỉ đã lưu</Label>
+                    <div className="grid gap-3">
+                      {savedAddresses.map((addr) => {
+                        const selected = selectedAddressId === addr.id;
+                        const label = [addr.address, addr.ward, addr.district, addr.city].filter(Boolean).join(", ");
+                        return (
+                          <button
+                            key={addr.id}
+                            type="button"
+                            onClick={() => void handleSelectSavedAddress(addr)}
+                            className={`text-left rounded-xl border px-4 py-3 transition ${
+                              selected ? "border-black bg-gray-50" : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-sm">{addr.recipientName}</p>
+                                <p className="text-sm text-gray-600">{addr.recipientPhone}</p>
+                                <p className="text-sm text-gray-500 mt-1">{label}</p>
+                              </div>
+                              {addr.isDefault && (
+                                <span className="rounded-full bg-black px-2 py-1 text-[11px] font-semibold text-white">
+                                  Mặc định
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label>Người nhận *</Label>
-                    <Input
-                      value={form.recipientName}
-                      onChange={(e) => setForm((f) => ({ ...f, recipientName: e.target.value }))}
-                    />
+                      <Input
+                        value={form.recipientName}
+                        onChange={(e) => setForm((f) => {
+                          setSelectedAddressId(null);
+                          return { ...f, recipientName: e.target.value };
+                        })}
+                      />
                   </div>
                   <div className="space-y-1">
                     <Label>Số điện thoại *</Label>
-                    <Input
-                      value={form.recipientPhone}
-                      onChange={(e) => setForm((f) => ({ ...f, recipientPhone: e.target.value }))}
-                    />
+                      <Input
+                        value={form.recipientPhone}
+                        onChange={(e) => setForm((f) => {
+                          setSelectedAddressId(null);
+                          return { ...f, recipientPhone: e.target.value };
+                        })}
+                      />
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -299,7 +460,10 @@ export default function CheckoutPage() {
                     <Label>Địa chỉ *</Label>
                     <Input
                       value={addressForm.address}
-                      onChange={(e) => setAddressForm((f) => ({ ...f, address: e.target.value }))}
+                      onChange={(e) => {
+                        setSelectedAddressId(null);
+                        setAddressForm((f) => ({ ...f, address: e.target.value }));
+                      }}
                     />
                   </div>
                   <div className="space-y-1">
@@ -352,7 +516,10 @@ export default function CheckoutPage() {
                     <Label>Phường / Xã</Label>
                     <Select
                       value={addressForm.ward}
-                      onValueChange={(v) => setAddressForm((f) => ({ ...f, ward: v ?? "" }))}
+                      onValueChange={(v) => {
+                        setSelectedAddressId(null);
+                        setAddressForm((f) => ({ ...f, ward: v ?? "" }));
+                      }}
                       disabled={!districtCode || wards.length === 0}
                     >
                       <SelectTrigger>

@@ -21,7 +21,6 @@ const navItems = [
   { href: "/admin/banners", label: "Ảnh banner", icon: ImageIcon },
   { href: "/admin/blog", label: "Bài viết", icon: FileText },
   { href: "/admin/chat", label: "Chat hỗ trợ", icon: MessageSquare },
-  { href: "/admin/contacts", label: "Liên hệ", icon: MessageSquare },
   { href: "/admin/audit-logs", label: "Nhật ký tài chính", icon: Banknote },
 ];
 

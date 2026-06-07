@@ -28,6 +28,8 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    private static final String PRIMARY_ADMIN_EMAIL = "phamcuong26.dev@gmail.com";
+
     @Value("${web.cors.allowed-origins:http://localhost:5173}")
     private String allowedOrigins;
 
@@ -111,7 +113,7 @@ public class SecurityConfig {
     @Bean
     public CommandLineRunner seedDefaultUsers(UserRepository userRepository, PasswordEncoder encoder) {
         return args -> {
-            seedUser(userRepository, encoder, "admin@sneakshop.vn", "Admin", "123456", "0900000001", UserRole.admin);
+            seedUser(userRepository, encoder, PRIMARY_ADMIN_EMAIL, "Cuong", "123456", "0900000001", UserRole.admin);
             seedUser(userRepository, encoder, "user@sneakshop.vn", "User", "123456", "0900000002", UserRole.user);
         };
     }
@@ -121,7 +123,9 @@ public class SecurityConfig {
         String resolvedPhone = (phone == null || phone.isBlank()) ? "0900000001" : phone;
         repo.findByEmail(email).ifPresentOrElse(
                 existing -> {
+                    existing.setFullName(fullName);
                     existing.setPassword(enc.encode(rawPwd));
+                    existing.setRole(role);
                     if (existing.getPhone() == null || existing.getPhone().isBlank()) {
                         existing.setPhone(resolvedPhone);
                     }

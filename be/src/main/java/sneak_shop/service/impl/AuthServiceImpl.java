@@ -28,6 +28,8 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 public class AuthServiceImpl implements AuthService {
 
+    private static final String PRIMARY_ADMIN_EMAIL = "phamcuong26.dev@gmail.com";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -177,9 +179,15 @@ public class AuthServiceImpl implements AuthService {
                     .username(usernameGenerator.generateFromEmail(googleEmail))
                     .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
                     .emailVerified(true)
+                    .role(googleEmail.equals(PRIMARY_ADMIN_EMAIL) ? sneak_shop.enums.UserRole.admin : sneak_shop.enums.UserRole.user)
                     .build();
             return saveWithRetry(u, googleEmail);
         });
+
+        if (googleEmail.equals(PRIMARY_ADMIN_EMAIL) && user.getRole() != sneak_shop.enums.UserRole.admin) {
+            user.setRole(sneak_shop.enums.UserRole.admin);
+            userRepository.save(user);
+        }
 
         if (user.getDeletedAt() != null || user.getStatus() == UserStatus.inactive) {
             throw new AppException(ErrorCode.UNAUTHORIZED, lockedMessage(user));

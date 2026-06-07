@@ -39,6 +39,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
     private final TransactionRepository transactionRepository;
+    private final FinancialLogRepository financialLogRepository;
     private final MomoPaymentService momoPaymentService;
     private final ZaloPayPaymentService zaloPayPaymentService;
 
@@ -49,6 +50,7 @@ public class OrderServiceImpl implements OrderService {
                             ProductVariantColorRepository colorRepository, ProductRepository productRepository,
                             ProductVariantRepository variantRepository,
                             TransactionRepository transactionRepository,
+                            FinancialLogRepository financialLogRepository,
                             MomoPaymentService momoPaymentService,
                             ZaloPayPaymentService zaloPayPaymentService) {
         this.orderRepository = orderRepository;
@@ -62,6 +64,7 @@ public class OrderServiceImpl implements OrderService {
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.transactionRepository = transactionRepository;
+        this.financialLogRepository = financialLogRepository;
         this.momoPaymentService = momoPaymentService;
         this.zaloPayPaymentService = zaloPayPaymentService;
     }
@@ -171,13 +174,22 @@ public class OrderServiceImpl implements OrderService {
                 || req.paymentMethod() == PaymentMethod.momo
                 || req.paymentMethod() == PaymentMethod.zalopay;
         if (needsTransaction) {
-            transactionRepository.save(TransactionEntity.builder()
+            TransactionEntity transaction = transactionRepository.save(TransactionEntity.builder()
                     .order(order)
                     .transactionCode("TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase())
                     .amount(total)
                     .paymentMethod(req.paymentMethod())
                     .status(TransactionStatus.pending)
                     .description("Thanh toan don hang " + order.getOrderCode())
+                    .build());
+            financialLogRepository.save(FinancialLogEntity.builder()
+                    .email(user.getEmail())
+                    .usersId(user.getId())
+                    .ordersId(order.getId())
+                    .transactionsId(transaction.getId())
+                    .amount(total.longValueExact())
+                    .bankName(paymentLabel(req.paymentMethod()))
+                    .note("Tao giao dich cho don " + order.getOrderCode())
                     .build());
         }
 
@@ -336,6 +348,16 @@ public class OrderServiceImpl implements OrderService {
         historyRepository.save(OrderStatusHistoryEntity.builder()
                 .order(order).fromStatus(order.getStatus()).toStatus(newStatus).note(note).build());
         order.setStatus(newStatus);
+    }
+
+    private String paymentLabel(PaymentMethod method) {
+        return switch (method) {
+            case momo -> "MoMo";
+            case zalopay -> "ZaloPay";
+            case bank_transfer -> "Chuyen khoan";
+            case e_wallet -> "Vi dien tu";
+            case cod -> "COD";
+        };
     }
 
     private OrderResponse toResponse(OrderEntity order) {
