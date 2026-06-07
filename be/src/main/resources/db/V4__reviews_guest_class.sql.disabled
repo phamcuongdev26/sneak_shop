@@ -1,0 +1,46 @@
+-- V4: reviews schema alignment + guest_class table
+
+-- reviews: rename customer_id -> user_id (FK column, requires ALGORITHM=INPLACE)
+ALTER TABLE reviews
+  CHANGE COLUMN customer_id user_id INT NOT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+-- reviews: add shop_id
+ALTER TABLE reviews
+  ADD COLUMN shop_id INT NULL,
+  ADD CONSTRAINT fk_reviews_shop FOREIGN KEY (shop_id) REFERENCES product_shops(id) ON DELETE SET NULL;
+
+-- reviews: rename replied_at -> shop_reply_at, add customer reply fields
+ALTER TABLE reviews
+  CHANGE COLUMN replied_at shop_reply_at DATETIME NULL,
+  ADD COLUMN reply        VARCHAR(300) NULL,
+  ADD COLUMN reply_at     DATETIME     NULL;
+
+-- reviews_image: rename from review_images
+RENAME TABLE review_images TO reviews_image;
+
+-- reviews_image: rename FK column first (requires ALGORITHM=INPLACE)
+ALTER TABLE reviews_image
+  CHANGE COLUMN review_id reviews_id INT NOT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+-- reviews_image: swap image_url+sort_order for product_image_id FK
+ALTER TABLE reviews_image
+  ADD COLUMN product_image_id INT NULL,
+  DROP COLUMN image_url,
+  DROP COLUMN sort_order,
+  ADD CONSTRAINT fk_ri_product_image
+    FOREIGN KEY (product_image_id) REFERENCES product_images(id) ON DELETE CASCADE;
+
+-- guest_class: per-customer loyalty tier tracking
+CREATE TABLE guest_class (
+  id           INT          PRIMARY KEY AUTO_INCREMENT,
+  user_id      INT          NOT NULL,
+  rank_name    ENUM('NEW','BRONZE','SILVER','GOLD','VIP') NOT NULL DEFAULT 'NEW',
+  product_id   INT          NOT NULL,
+  total_amount INT          NOT NULL DEFAULT 0,
+  description  VARCHAR(25)  NOT NULL DEFAULT 'new',
+  color        VARCHAR(100) NOT NULL DEFAULT 'gray',
+  CONSTRAINT fk_gc_user    FOREIGN KEY (user_id)    REFERENCES customers(id) ON DELETE CASCADE,
+  CONSTRAINT fk_gc_product FOREIGN KEY (product_id) REFERENCES products(id)  ON DELETE CASCADE
+);

@@ -1,0 +1,27 @@
+-- V5: rename customer_id -> user_id in orders/addresses/cart_items, drop momo from payment enum
+
+-- orders: rename customer_id -> user_id (FK column, requires ALGORITHM=INPLACE)
+ALTER TABLE orders
+  CHANGE COLUMN customer_id user_id INT NOT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+-- orders: migrate momo -> e_wallet, then remove momo from enum
+UPDATE orders SET payment_method = 'e_wallet' WHERE payment_method = 'momo';
+ALTER TABLE orders
+  MODIFY COLUMN payment_method ENUM('cod','bank_transfer','e_wallet') NOT NULL;
+
+-- addresses: rename customer_id -> user_id (FK column, requires ALGORITHM=INPLACE)
+ALTER TABLE addresses
+  CHANGE COLUMN customer_id user_id INT NOT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+-- cart_items: drop unique constraint first, then rename FK column, then re-add constraint
+ALTER TABLE cart_items
+  DROP INDEX uk_cart_customer_product_variant_color;
+
+ALTER TABLE cart_items
+  CHANGE COLUMN customer_id user_id INT NOT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+
+ALTER TABLE cart_items
+  ADD UNIQUE KEY uk_cart_user_product_variant_color (user_id, product_id, variant_id, color_id);
