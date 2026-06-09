@@ -37,7 +37,7 @@ public class AdminBannerController {
             throw new AppException(ErrorCode.INVALID_REQUEST, "Chi duoc toi da 9 banner");
         }
         BannerEntity banner = new BannerEntity();
-        apply(banner, req);
+        applyCreate(banner, req);
         if (req.sortOrder() == null) {
             banner.setSortOrder(bannerRepository.findAllByOrderBySortOrderAscIdDesc().stream()
                     .map(BannerEntity::getSortOrder)
@@ -52,7 +52,7 @@ public class AdminBannerController {
     public ApiResponse<BannerEntity> update(@PathVariable Integer id, @RequestBody BannerRequest req) {
         BannerEntity banner = bannerRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Banner khong ton tai"));
-        apply(banner, req);
+        applyUpdate(banner, req);
         return ApiResponse.ok("Da cap nhat banner", bannerRepository.save(banner));
     }
 
@@ -86,7 +86,7 @@ public class AdminBannerController {
         return ApiResponse.ok("Da xoa banner");
     }
 
-    private void apply(BannerEntity banner, BannerRequest req) {
+    private void applyCreate(BannerEntity banner, BannerRequest req) {
         if (req == null || req.imageUrl() == null || req.imageUrl().isBlank()) {
             throw new AppException(ErrorCode.INVALID_REQUEST, "ImageUrl khong hop le");
         }
@@ -98,6 +98,38 @@ public class AdminBannerController {
         banner.setSortOrder(req.sortOrder() != null ? req.sortOrder() : 0);
         banner.setStartDate(req.startDate());
         banner.setEndDate(req.endDate());
+        if (banner.getCreatedAt() == null) {
+            banner.setCreatedAt(LocalDateTime.now());
+        }
+        banner.setUpdatedAt(LocalDateTime.now());
+    }
+
+    private void applyUpdate(BannerEntity banner, BannerRequest req) {
+        if (req == null || req.imageUrl() == null || req.imageUrl().isBlank()) {
+            throw new AppException(ErrorCode.INVALID_REQUEST, "ImageUrl khong hop le");
+        }
+        if (req.title() != null) {
+            banner.setTitle(normalize(req.title()));
+        }
+        banner.setImageUrl(req.imageUrl().trim());
+        if (req.linkUrl() != null) {
+            banner.setLinkUrl(normalize(req.linkUrl()));
+        }
+        if (req.position() != null) {
+            banner.setPosition(normalize(req.position()) != null ? normalize(req.position()) : "hero");
+        }
+        if (req.isActive() != null) {
+            banner.setIsActive(req.isActive());
+        }
+        if (req.sortOrder() != null) {
+            banner.setSortOrder(req.sortOrder());
+        }
+        if (req.startDate() != null) {
+            banner.setStartDate(req.startDate());
+        }
+        if (req.endDate() != null) {
+            banner.setEndDate(req.endDate());
+        }
         if (banner.getCreatedAt() == null) {
             banner.setCreatedAt(LocalDateTime.now());
         }
