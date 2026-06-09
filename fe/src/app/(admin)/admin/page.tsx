@@ -1,22 +1,40 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dashboardApi } from "@/lib/api/dashboard";
 import { formatRating, formatVND, formatDate } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import type { Dashboard } from "@/lib/types";
+import { useRealtimeSocket } from "@/lib/useRealtimeSocket";
+import { useAuthStore } from "@/store/auth";
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const user = useAuthStore((s) => s.user);
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const r = await dashboardApi.get(7);
+      setData(r.data.result);
+    } catch {
+      // ignore
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    dashboardApi.get(7)
-      .then((r) => setData(r.data.result))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    void load();
+  }, [load]);
+
+  useRealtimeSocket(Boolean(user), (event) => {
+    if (event.channel === "dashboard") {
+      void load(true);
+    }
+  });
 
   if (loading) {
     return (

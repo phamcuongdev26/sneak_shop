@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -9,7 +9,9 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { chatApi } from "@/lib/api/chat";
+import { dashboardApi } from "@/lib/api/dashboard";
 import { cn } from "@/lib/utils";
+import { useRealtimeSocket } from "@/lib/useRealtimeSocket";
 
 const navItems = [
   { href: "/admin", label: "Bảng điều khiển", icon: LayoutDashboard, exact: true },
@@ -29,24 +31,38 @@ export default function AdminSidebar() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const [chatUnread, setChatUnread] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [newUsersToday, setNewUsersToday] = useState(0);
+
+  const loadCounts = useCallback(async () => {
+    try {
+      const [chatRes, dashRes] = await Promise.all([
+        chatApi.adminUnreadCount(),
+        dashboardApi.get(7),
+      ]);
+      setChatUnread(chatRes.data.result ?? 0);
+      setPendingOrders(Number(dashRes.data.result?.pendingOrders ?? 0));
+      setNewUsersToday(Number(dashRes.data.result?.newUsersToday ?? 0));
+    } catch {
+      setChatUnread(0);
+      setPendingOrders(0);
+      setNewUsersToday(0);
+    }
+  }, []);
+
+  useRealtimeSocket(Boolean(user), (event) => {
+    if (event.channel === "notification" || event.channel === "chat" || event.channel === "dashboard") {
+      void loadCounts();
+    }
+  });
 
   useEffect(() => {
-    let mounted = true;
-    const loadUnread = async () => {
-      try {
-        const r = await chatApi.adminUnreadCount();
-        if (mounted) setChatUnread(r.data.result ?? 0);
-      } catch {
-        if (mounted) setChatUnread(0);
-      }
-    };
-    loadUnread();
-    const timer = setInterval(loadUnread, 5000);
+    loadCounts();
+    const timer = setInterval(loadCounts, 30000);
     return () => {
-      mounted = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [loadCounts]);
 
   const handleLogout = () => {
     logout();
@@ -56,14 +72,20 @@ export default function AdminSidebar() {
   return (
     <aside className="w-56 flex-shrink-0 bg-gray-900 text-gray-300 flex flex-col min-h-screen">
       <div className="px-4 py-5 border-b border-gray-700">
-        <h1 className="font-black text-white text-lg">SNEAK ADMIN</h1>
-        {user && <p className="text-xs text-gray-400 mt-0.5 truncate">{user.email}</p>}
+        <div className="min-w-0">
+          <h1 className="font-black text-white text-lg">SNEAK ADMIN</h1>
+          {user && <p className="text-xs text-gray-400 mt-0.5 truncate">{user.email}</p>}
+        </div>
       </div>
 
       <nav className="flex-1 py-4 px-2 space-y-0.5">
         {navItems.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
-          const showUnread = href === "/admin/chat" && chatUnread > 0;
+          const badge =
+            href === "/admin/chat" ? chatUnread :
+            href === "/admin/orders" ? pendingOrders :
+            href === "/admin/users" ? newUsersToday :
+            0;
           return (
             <Link
               key={href}
@@ -74,12 +96,12 @@ export default function AdminSidebar() {
                   ? "bg-white text-gray-900"
                   : "hover:bg-gray-800 hover:text-white"
               )}
-            >
-              <Icon className="w-4 h-4 flex-shrink-0" />
-              {label}
-              {showUnread && (
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                {label}
+              {badge > 0 && (
                 <span className="ml-auto inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
-                  {chatUnread > 99 ? "99+" : chatUnread}
+                  {badge > 99 ? "99+" : badge}
                 </span>
               )}
             </Link>

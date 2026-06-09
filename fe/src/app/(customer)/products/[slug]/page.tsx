@@ -31,6 +31,31 @@ export default function ProductDetailPage() {
   const { user } = useAuthStore();
 
   const normalizeColor = (value: string) => value.trim().toLowerCase();
+  const resolveColorImage = (
+    product: Product | null,
+    colorName: string,
+    currentVariantId?: number,
+    currentColorId?: number
+  ) => {
+    if (!product) return null;
+    const key = normalizeColor(colorName);
+    if (!key) return null;
+
+    const currentVariant = product.variants.find((variant) => variant.id === currentVariantId);
+    const currentColor = currentVariant?.colors.find((color) => color.id === currentColorId);
+    if (currentColor?.imageUrl) return currentColor.imageUrl;
+
+    for (const variant of product.variants) {
+      for (const color of variant.colors) {
+        if (variant.id === currentVariantId && color.id === currentColorId) continue;
+        if (normalizeColor(color.color) === key && color.imageUrl) {
+          return color.imageUrl;
+        }
+      }
+    }
+
+    return currentColor?.imageUrl ?? null;
+  };
 
   useEffect(() => {
     if (!slug) return;
@@ -106,9 +131,10 @@ export default function ProductDetailPage() {
       const firstColor = firstSizeWithColor.colors[0];
       setSelectedVariantId(firstSizeWithColor.id);
       setSelectedColorId(firstColor?.id ?? null);
-      if (firstColor?.imageUrl) {
-        setSelectedImage(firstColor.imageUrl);
-      }
+      const imageUrl = firstColor
+        ? resolveColorImage(product, firstColor.color, firstSizeWithColor.id, firstColor.id)
+        : null;
+      if (imageUrl) setSelectedImage(imageUrl);
     }
   }, [product, selectedVariantId]);
 
@@ -121,7 +147,10 @@ export default function ProductDetailPage() {
     if (activeColor) return;
     const nextColor = selectedVariant.colors.find((color) => color.stockQuantity > 0) ?? selectedVariant.colors[0];
     setSelectedColorId(nextColor?.id ?? null);
-    if (nextColor?.imageUrl) setSelectedImage(nextColor.imageUrl);
+    const imageUrl = nextColor
+      ? resolveColorImage(product, nextColor.color, selectedVariant.id, nextColor.id)
+      : null;
+    if (imageUrl) setSelectedImage(imageUrl);
   }, [selectedVariant, selectedColorId]);
 
   const copyProductUrl = async () => {
@@ -292,7 +321,10 @@ export default function ProductDetailPage() {
                       const nextColor = v.colors.find((c) => c.stockQuantity > 0) ?? v.colors[0];
                       setSelectedVariantId(v.id);
                       setSelectedColorId(nextColor?.id ?? null);
-                      if (nextColor?.imageUrl) setSelectedImage(nextColor.imageUrl);
+                      const imageUrl = nextColor
+                        ? resolveColorImage(product, nextColor.color, v.id, nextColor.id)
+                        : null;
+                      if (imageUrl) setSelectedImage(imageUrl);
                     }}
                     className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${
                       selectedVariantId === v.id
@@ -323,9 +355,10 @@ export default function ProductDetailPage() {
                     <button
                       key={c.key}
                       onClick={() => {
-                        if (!activeColor || disabled) return;
+                        if (!activeColor || disabled || !selectedVariant) return;
                         setSelectedColorId(activeColor.id);
-                        if (activeColor.imageUrl) setSelectedImage(activeColor.imageUrl);
+                        const imageUrl = resolveColorImage(product, activeColor.color, selectedVariant.id, activeColor.id);
+                        if (imageUrl) setSelectedImage(imageUrl);
                       }}
                       disabled={disabled}
                       className={`px-4 py-2 rounded-lg border text-sm font-medium transition ${

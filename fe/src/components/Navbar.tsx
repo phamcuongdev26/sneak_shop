@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useAuthStore } from "@/store/auth";
 import { useCartStore } from "@/store/cart";
+import NotificationBell from "@/components/NotificationBell";
 import { categoriesApi } from "@/lib/api/categories";
 import { productsApi } from "@/lib/api/products";
 import type { Category, Product } from "@/lib/types";
@@ -330,6 +331,8 @@ export default function Navbar() {
               >
                 <Search className="h-4.5 w-4.5" />
               </button>
+
+              {user && <NotificationBell variant="light" />}
 
               <Link
                 href="/cart"

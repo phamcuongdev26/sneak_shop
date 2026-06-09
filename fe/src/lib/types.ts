@@ -193,6 +193,21 @@ export interface Notification {
   createdAt: string;
 }
 
+export interface RealtimeEvent {
+  channel: "notification" | "chat" | "dashboard" | "system";
+  type: string;
+  scope?: string;
+  orderCode?: string;
+  messageId?: number;
+  senderRole?: string;
+  senderName?: string;
+  content?: string;
+  createdAt?: string;
+  isRead?: boolean;
+  unreadCount?: number;
+  notification?: Notification;
+}
+
 export interface Banner {
   id: number;
   title: string | null;

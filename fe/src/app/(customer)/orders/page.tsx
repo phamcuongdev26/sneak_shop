@@ -160,21 +160,14 @@ function OrderCard({ order, reviewedOrderItemIds, onRefresh }: { order: Order; r
 
   return (
     <div className="bg-white border rounded-2xl overflow-hidden hover:shadow-md transition">
-      {/* Header — cancelled dùng shop row riêng */}
+      {/* Header */}
       {order.status === "cancelled" ? (
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white tracking-wide">MALL</span>
-            <span className="font-semibold text-sm text-gray-800">Sneak Shop</span>
-            <button
-              onClick={() => openChat(order.orderCode)}
-              className="inline-flex h-7 items-center gap-1 rounded-md border border-red-500 px-2.5 text-xs font-medium text-red-500 hover:bg-red-50 transition"
-            >
-              Chat
-            </button>
-            <Link href="/products" className="inline-flex h-7 items-center rounded-md border border-gray-300 px-2.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition">
-              Xem Shop
-            </Link>
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4 text-gray-400" />
+            <span className="font-semibold text-sm text-gray-700">#{order.orderCode}</span>
+            <span className="text-gray-300">·</span>
+            <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
           </div>
           <span className="text-sm font-bold text-blue-600">ĐÃ HỦY</span>
         </div>

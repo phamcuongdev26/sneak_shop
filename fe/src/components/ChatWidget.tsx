@@ -6,6 +6,7 @@ import { chatApi, type ChatMessage } from "@/lib/api/chat";
 import { useChatStore } from "@/store/chat";
 import { useAuthStore } from "@/store/auth";
 import { getError } from "@/lib/api";
+import { useRealtimeSocket } from "@/lib/useRealtimeSocket";
 
 function MessengerIcon({ className }: { className?: string }) {
   return (
@@ -46,6 +47,12 @@ export function ChatWidget() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [isOpen, effectiveCode]);
 
+  useRealtimeSocket(Boolean(user), (event) => {
+    if (event.channel === "chat" && event.orderCode && event.orderCode === effectiveCode) {
+      void load(true);
+    }
+  });
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -59,9 +66,9 @@ export function ChatWidget() {
     if (!input.trim() || !effectiveCode || sending) return;
     setSending(true);
     try {
-      const r = await chatApi.sendMessage(effectiveCode, input.trim());
-      setMessages((prev) => [...prev, r.data.result]);
+      await chatApi.sendMessage(effectiveCode, input.trim());
       setInput("");
+      await load(true);
     } catch (err) { toast.error(getError(err)); }
     setSending(false);
   };

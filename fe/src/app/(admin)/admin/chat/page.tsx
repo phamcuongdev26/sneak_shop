@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { chatApi, type ChatMessage, type Conversation } from "@/lib/api/chat";
 import { formatDate } from "@/lib/format";
+import { useRealtimeSocket } from "@/lib/useRealtimeSocket";
 
 export default function AdminChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -36,6 +37,14 @@ export default function AdminChatPage() {
     if (!silent) setLoadingMsgs(false);
   };
 
+  useRealtimeSocket(true, (event) => {
+    if (event.channel !== "chat" || !event.orderCode) return;
+    void loadConversations();
+    if (selected === event.orderCode) {
+      void loadMessages(event.orderCode, true);
+    }
+  });
+
   useEffect(() => { loadConversations(); }, []);
 
   useEffect(() => {
@@ -62,9 +71,9 @@ export default function AdminChatPage() {
     if (!input.trim() || !selected || sending) return;
     setSending(true);
     try {
-      const r = await chatApi.adminSendMessage(selected, input.trim());
-      setMessages((prev) => [...prev, r.data.result]);
+      await chatApi.adminSendMessage(selected, input.trim());
       setInput("");
+      await loadMessages(selected, true);
       loadConversations();
     } catch { toast.error("Gửi thất bại"); }
     setSending(false);
