@@ -5,6 +5,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import sneak_shop.common.response.ApiResponse;
+import sneak_shop.entity.OrderEntity;
 import sneak_shop.dto.response.DashboardResponse;
 import sneak_shop.dto.response.DashboardResponse.*;
 import sneak_shop.enums.OrderStatus;
@@ -14,9 +15,9 @@ import java.math.BigDecimal;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/admin/dashboard")
@@ -48,8 +49,8 @@ public class AdminDashboardController {
         Instant monthStart = today.withDayOfMonth(1).atStartOfDay(vn).toInstant();
         Instant chartFrom = today.minusDays(days - 1).atStartOfDay(vn).toInstant();
 
-        BigDecimal revenueToday = orderRepository.sumRevenueBetween(todayStart, todayEnd);
-        BigDecimal revenueMonth = orderRepository.sumRevenueBetween(monthStart, todayEnd);
+        BigDecimal revenueToday = orderRepository.sumRevenueBetween(todayStart, todayEnd, OrderStatus.cancelled);
+        BigDecimal revenueMonth = orderRepository.sumRevenueBetween(monthStart, todayEnd, OrderStatus.cancelled);
         Long ordersToday = orderRepository.countOrdersBetween(todayStart, todayEnd);
         Long newUsers = userRepository.countNewBetween(todayStart, todayEnd);
         Long pendingOrders = orderRepository.countByStatus(OrderStatus.pending);
@@ -58,18 +59,23 @@ public class AdminDashboardController {
         Double avgRating = reviewRepository.avgRatingAll();
         Long totalReviews = reviewRepository.count();
 
-        List<Object[]> rows = orderRepository.revenueByDay(chartFrom);
-        Map<String, Object[]> byDay = rows.stream()
-                .collect(Collectors.toMap(r -> r[0].toString(), r -> r));
-
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd/MM");
         List<DailyRevenue> chart = new ArrayList<>();
+        Map<LocalDate, BigDecimal> revenueByDay = new HashMap<>();
+        Map<LocalDate, Long> ordersByDay = new HashMap<>();
+        for (OrderEntity order : orderRepository.findByCreatedAtGreaterThanEqual(chartFrom)) {
+            LocalDate date = order.getCreatedAt().atZone(vn).toLocalDate();
+            ordersByDay.merge(date, 1L, Long::sum);
+            if (order.getStatus() != OrderStatus.cancelled) {
+                revenueByDay.merge(date,
+                        order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO,
+                        BigDecimal::add);
+            }
+        }
         for (int i = days - 1; i >= 0; i--) {
             LocalDate d = today.minusDays(i);
-            String key = d.toString();
-            Object[] row = byDay.get(key);
-            BigDecimal rev = row != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
-            Long cnt = row != null ? Long.parseLong(row[2].toString()) : 0L;
+            BigDecimal rev = revenueByDay.getOrDefault(d, BigDecimal.ZERO);
+            Long cnt = ordersByDay.getOrDefault(d, 0L);
             chart.add(new DailyRevenue(d.format(fmt), rev, cnt));
         }
 

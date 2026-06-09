@@ -8,19 +8,23 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import type { Dashboard } from "@/lib/types";
 import { useRealtimeSocket } from "@/lib/useRealtimeSocket";
 import { useAuthStore } from "@/store/auth";
+import { getError } from "@/lib/api";
 
 export default function AdminDashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const user = useAuthStore((s) => s.user);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
+    setError(null);
     try {
       const r = await dashboardApi.get(7);
       setData(r.data.result);
-    } catch {
-      // ignore
+    } catch (err) {
+      setData(null);
+      setError(getError(err) || "Không tải được dữ liệu");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -44,6 +48,23 @@ export default function AdminDashboardPage() {
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Bảng điều khiển</h1>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+        <button
+          onClick={() => void load()}
+          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+        >
+          Tải lại
+        </button>
       </div>
     );
   }

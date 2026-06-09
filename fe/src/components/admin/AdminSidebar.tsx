@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Star,
-  Tag, Image as ImageIcon, FileText, LogOut, ChevronLeft,
+  Tag, Image as ImageIcon, LogOut, ChevronLeft,
   ClipboardList, Banknote, MessageSquare,
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
@@ -21,20 +21,25 @@ const navItems = [
   { href: "/admin/reviews", label: "Đánh giá", icon: Star },
   { href: "/admin/categories", label: "Danh mục", icon: Tag },
   { href: "/admin/banners", label: "Ảnh banner", icon: ImageIcon },
-  { href: "/admin/blog", label: "Bài viết", icon: FileText },
   { href: "/admin/chat", label: "Chat hỗ trợ", icon: MessageSquare },
   { href: "/admin/audit-logs", label: "Nhật ký tài chính", icon: Banknote },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  const { user, token, logout } = useAuthStore();
   const router = useRouter();
   const [chatUnread, setChatUnread] = useState(0);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [newUsersToday, setNewUsersToday] = useState(0);
 
   const loadCounts = useCallback(async () => {
+    if (!token) {
+      setChatUnread(0);
+      setPendingOrders(0);
+      setNewUsersToday(0);
+      return;
+    }
     try {
       const [chatRes, dashRes] = await Promise.all([
         chatApi.adminUnreadCount(),
@@ -48,9 +53,9 @@ export default function AdminSidebar() {
       setPendingOrders(0);
       setNewUsersToday(0);
     }
-  }, []);
+  }, [token]);
 
-  useRealtimeSocket(Boolean(user), (event) => {
+  useRealtimeSocket(Boolean(user && token), (event) => {
     if (event.channel === "notification" || event.channel === "chat" || event.channel === "dashboard") {
       void loadCounts();
     }

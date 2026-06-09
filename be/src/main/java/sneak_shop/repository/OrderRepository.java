@@ -36,8 +36,9 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Integer> {
     Long countByUserId(Integer userId);
     boolean existsByOrderCode(String orderCode);
 
-    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM OrderEntity o WHERE o.createdAt >= :from AND o.createdAt < :to AND o.status <> 'cancelled'")
-    BigDecimal sumRevenueBetween(@Param("from") Instant from, @Param("to") Instant to);
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM OrderEntity o WHERE o.createdAt >= :from AND o.createdAt < :to AND o.status <> :cancelled")
+    BigDecimal sumRevenueBetween(@Param("from") Instant from, @Param("to") Instant to,
+                                 @Param("cancelled") OrderStatus cancelled);
 
     @Query("SELECT COUNT(o) FROM OrderEntity o WHERE o.createdAt >= :from AND o.createdAt < :to")
     Long countOrdersBetween(@Param("from") Instant from, @Param("to") Instant to);
@@ -59,14 +60,5 @@ public interface OrderRepository extends JpaRepository<OrderEntity, Integer> {
             @Param("status") OrderStatus status
     );
 
-    @Query(value = """
-        SELECT DATE(CONVERT_TZ(o.created_at, '+00:00', '+07:00')) as day,
-               COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN o.total_amount ELSE 0 END), 0) as revenue,
-               COUNT(*) as orders
-        FROM orders o
-        WHERE o.created_at >= :from
-        GROUP BY day
-        ORDER BY day ASC
-        """, nativeQuery = true)
-    List<Object[]> revenueByDay(@Param("from") Instant from);
+    List<OrderEntity> findByCreatedAtGreaterThanEqual(Instant from);
 }

@@ -162,7 +162,6 @@ export default function Navbar() {
   const navLinks = [
     { href: "/products", label: "Mới" },
     { href: "/products?sort=sale", label: "Giảm giá" },
-    { href: "/blog", label: "Bài viết" },
   ];
 
   const activeRoot = topCategories.find((c) => c.id === activeRootId) ?? null;

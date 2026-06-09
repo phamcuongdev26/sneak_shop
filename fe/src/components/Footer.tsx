@@ -12,7 +12,6 @@ export default function Footer() {
           <h4 className="text-white font-semibold mb-3">Liên kết</h4>
           <div className="flex flex-col gap-1 text-sm">
             <Link href="/products" className="hover:text-white transition-colors">Sản phẩm</Link>
-            <Link href="/blog" className="hover:text-white transition-colors">Bài viết</Link>
           </div>
         </div>
         <div>

@@ -218,17 +218,6 @@ export interface Banner {
   sortOrder: number;
 }
 
-export interface BlogPost {
-  id: number;
-  title: string;
-  slug: string;
-  summary: string | null;
-  content: string | null;
-  coverImageUrl: string | null;
-  status: string;
-  createdAt: string;
-}
-
 export interface Category {
   id: number;
   name: string;
