@@ -13,6 +13,7 @@ import sneak_shop.repository.ChatRepository;
 import sneak_shop.repository.OrderRepository;
 import sneak_shop.repository.UserRepository;
 import sneak_shop.security.UserContext;
+import sneak_shop.websocket.RealtimeSocketHub;
 
 import java.time.Instant;
 import java.util.List;
@@ -47,13 +48,16 @@ public class ChatController {
     private final ChatRepository chatRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final RealtimeSocketHub realtimeSocketHub;
 
     public ChatController(ChatRepository chatRepository,
                           OrderRepository orderRepository,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          RealtimeSocketHub realtimeSocketHub) {
         this.chatRepository = chatRepository;
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
+        this.realtimeSocketHub = realtimeSocketHub;
     }
 
     private void verifyAccess(String orderCode, Integer userId) {
@@ -114,6 +118,10 @@ public class ChatController {
                 .build();
 
         ChatMessageEntity saved = chatRepository.save(msg);
+        realtimeSocketHub.afterCommit(() -> {
+            realtimeSocketHub.pushChatMessageToUser(ctx.id(), saved);
+            realtimeSocketHub.pushChatMessageToAdmins(saved);
+        });
         return ApiResponse.ok("Gui tin nhan thanh cong", ChatMessageResponse.from(saved));
     }
 }

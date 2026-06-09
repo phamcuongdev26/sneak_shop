@@ -14,6 +14,7 @@ import sneak_shop.entity.*;
 import sneak_shop.enums.OrderStatus;
 import sneak_shop.repository.*;
 import sneak_shop.service.ReviewService;
+import sneak_shop.service.NotificationService;
 
 import java.time.Instant;
 
@@ -26,17 +27,20 @@ public class ReviewServiceImpl implements ReviewService {
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
     private final ReviewImageRepository reviewImageRepository;
+    private final NotificationService notificationService;
 
     public ReviewServiceImpl(ReviewRepository reviewRepository, UserRepository userRepository,
                              OrderItemRepository orderItemRepository, ProductRepository productRepository,
                              ProductImageRepository productImageRepository,
-                             ReviewImageRepository reviewImageRepository) {
+                             ReviewImageRepository reviewImageRepository,
+                             NotificationService notificationService) {
         this.reviewRepository = reviewRepository;
         this.userRepository = userRepository;
         this.orderItemRepository = orderItemRepository;
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
         this.reviewImageRepository = reviewImageRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -94,6 +98,12 @@ public class ReviewServiceImpl implements ReviewService {
 
         review.getImages().clear();
         review.getImages().addAll(reviewImageRepository.findByReviewId(review.getId()));
+        notificationService.notifyAdmins(
+                "Co danh gia moi",
+                "San pham " + product.getName() + " vua co mot danh gia moi.",
+                "review_new",
+                null
+        );
         return ReviewResponse.from(review);
     }
 
@@ -103,7 +113,15 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Review khong ton tai"));
         review.setShopReply(req.reply());
         review.setShopReplyAt(Instant.now());
-        return ReviewResponse.from(reviewRepository.save(review));
+        review = reviewRepository.save(review);
+        notificationService.notifyUser(
+                review.getUser().getId(),
+                "Shop đã phản hồi",
+                "Shop vừa phản hồi đánh giá của bạn cho sản phẩm " + review.getProduct().getName() + ".",
+                "review_reply",
+                null
+        );
+        return ReviewResponse.from(review);
     }
 
     @Transactional

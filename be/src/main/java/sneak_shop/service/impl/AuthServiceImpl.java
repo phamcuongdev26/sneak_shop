@@ -20,6 +20,7 @@ import sneak_shop.service.PasswordResetService;
 import sneak_shop.service.PhoneOtpService;
 import sneak_shop.service.UsernameGenerator;
 import sneak_shop.service.ZaloAuthService;
+import sneak_shop.websocket.RealtimeSocketHub;
 
 import java.util.Map;
 import java.util.Locale;
@@ -37,11 +38,12 @@ public class AuthServiceImpl implements AuthService {
     private final PhoneOtpService phoneOtpService;
     private final UsernameGenerator usernameGenerator;
     private final ZaloAuthService zaloAuthService;
+    private final RealtimeSocketHub realtimeSocketHub;
 
     public AuthServiceImpl(UserRepository userRepository, PasswordEncoder passwordEncoder,
                            JwtService jwtService, PasswordResetService passwordResetService,
                            PhoneOtpService phoneOtpService, UsernameGenerator usernameGenerator,
-                           ZaloAuthService zaloAuthService) {
+                           ZaloAuthService zaloAuthService, RealtimeSocketHub realtimeSocketHub) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -49,6 +51,7 @@ public class AuthServiceImpl implements AuthService {
         this.phoneOtpService = phoneOtpService;
         this.usernameGenerator = usernameGenerator;
         this.zaloAuthService = zaloAuthService;
+        this.realtimeSocketHub = realtimeSocketHub;
     }
 
     @Override
@@ -66,6 +69,7 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(true)
                 .build();
         user = saveWithRetry(user, req.email());
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("user_created"));
         return AuthResponse.from(user, jwtService.generateToken(user));
     }
 
@@ -84,6 +88,7 @@ public class AuthServiceImpl implements AuthService {
                 .emailVerified(true)
                 .build();
         user = saveWithRetry(user, req.email());
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("user_created"));
         return AuthResponse.from(user, jwtService.generateToken(user));
     }
 
@@ -101,6 +106,7 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(req.password()))
                 .build();
         user = saveWithRetry(user, req.phone());
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("user_created"));
         return AuthResponse.from(user, jwtService.generateToken(user));
     }
 
@@ -172,6 +178,7 @@ public class AuthServiceImpl implements AuthService {
         final String googleEmail = email;
         final String name = (String) info.getOrDefault("name", googleEmail);
 
+        final boolean[] created = {false};
         UserEntity user = userRepository.findByEmail(googleEmail).orElseGet(() -> {
             UserEntity u = UserEntity.builder()
                     .email(googleEmail)
@@ -181,6 +188,7 @@ public class AuthServiceImpl implements AuthService {
                     .emailVerified(true)
                     .role(googleEmail.equals(PRIMARY_ADMIN_EMAIL) ? sneak_shop.enums.UserRole.admin : sneak_shop.enums.UserRole.user)
                     .build();
+            created[0] = true;
             return saveWithRetry(u, googleEmail);
         });
 
@@ -192,6 +200,9 @@ public class AuthServiceImpl implements AuthService {
         if (user.getDeletedAt() != null || user.getStatus() == UserStatus.inactive) {
             throw new AppException(ErrorCode.UNAUTHORIZED, lockedMessage(user));
         }
+        if (created[0]) {
+            realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("user_created"));
+        }
         return AuthResponse.from(user, jwtService.generateToken(user));
     }
 
@@ -199,6 +210,7 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse zaloLogin(String code, String codeVerifier) {
         ZaloAuthService.ZaloUserInfo info = zaloAuthService.getUserInfo(code, codeVerifier);
 
+        final boolean[] created = {false};
         UserEntity user = userRepository.findByZaloId(info.id()).orElseGet(() -> {
             UserEntity u = UserEntity.builder()
                     .zaloId(info.id())
@@ -207,6 +219,7 @@ public class AuthServiceImpl implements AuthService {
                     .password(passwordEncoder.encode(java.util.UUID.randomUUID().toString()))
                     .avatarUrl(info.avatarUrl())
                     .build();
+            created[0] = true;
             return saveWithRetry(u, info.id());
         });
 
@@ -217,6 +230,9 @@ public class AuthServiceImpl implements AuthService {
 
         if (user.getDeletedAt() != null || user.getStatus() == sneak_shop.enums.UserStatus.inactive) {
             throw new AppException(ErrorCode.UNAUTHORIZED, lockedMessage(user));
+        }
+        if (created[0]) {
+            realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("user_created"));
         }
         return AuthResponse.from(user, jwtService.generateToken(user));
     }

@@ -16,8 +16,10 @@ import sneak_shop.entity.*;
 import sneak_shop.enums.*;
 import sneak_shop.repository.*;
 import sneak_shop.service.OrderService;
+import sneak_shop.service.NotificationService;
 import sneak_shop.service.MomoPaymentService;
 import sneak_shop.service.ZaloPayPaymentService;
+import sneak_shop.websocket.RealtimeSocketHub;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -40,8 +42,10 @@ public class OrderServiceImpl implements OrderService {
     private final ProductVariantRepository variantRepository;
     private final TransactionRepository transactionRepository;
     private final FinancialLogRepository financialLogRepository;
+    private final NotificationService notificationService;
     private final MomoPaymentService momoPaymentService;
     private final ZaloPayPaymentService zaloPayPaymentService;
+    private final RealtimeSocketHub realtimeSocketHub;
 
     public OrderServiceImpl(OrderRepository orderRepository, OrderItemRepository orderItemRepository,
                             OrderStatusHistoryRepository historyRepository, CartItemRepository cartItemRepository,
@@ -51,8 +55,10 @@ public class OrderServiceImpl implements OrderService {
                             ProductVariantRepository variantRepository,
                             TransactionRepository transactionRepository,
                             FinancialLogRepository financialLogRepository,
+                            NotificationService notificationService,
                             MomoPaymentService momoPaymentService,
-                            ZaloPayPaymentService zaloPayPaymentService) {
+                            ZaloPayPaymentService zaloPayPaymentService,
+                            RealtimeSocketHub realtimeSocketHub) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.historyRepository = historyRepository;
@@ -65,8 +71,10 @@ public class OrderServiceImpl implements OrderService {
         this.variantRepository = variantRepository;
         this.transactionRepository = transactionRepository;
         this.financialLogRepository = financialLogRepository;
+        this.notificationService = notificationService;
         this.momoPaymentService = momoPaymentService;
         this.zaloPayPaymentService = zaloPayPaymentService;
+        this.realtimeSocketHub = realtimeSocketHub;
     }
 
     private record OrderItem(ProductEntity product, ProductVariantEntity variant,
@@ -165,6 +173,20 @@ public class OrderServiceImpl implements OrderService {
 
         historyRepository.save(OrderStatusHistoryEntity.builder()
                 .order(order).toStatus(OrderStatus.pending).note("Don hang duoc tao").build());
+        notificationService.notifyAdmins(
+                "Don hang moi",
+                "Don hang " + order.getOrderCode() + " vua duoc tao.",
+                "order_new",
+                null
+        );
+        notificationService.notifyUser(
+                userId,
+                "Đặt hàng thành công",
+                "Đơn hàng " + order.getOrderCode() + " đã được tiếp nhận.",
+                "order_created",
+                null
+        );
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("order_created"));
 
         if (!isBuyNow) {
             cartItemRepository.deleteByUserId(userId);
@@ -282,7 +304,22 @@ public class OrderServiceImpl implements OrderService {
         updateStatus(order, OrderStatus.cancelled, reason);
         order.setCancelReason(reason);
         order.setCancelledAt(Instant.now());
-        return toResponse(orderRepository.save(order));
+        order = orderRepository.save(order);
+        notificationService.notifyAdmins(
+                "Don hang da bi huy",
+                "Don hang " + order.getOrderCode() + " vua bi huy.",
+                "order_cancelled",
+                null
+        );
+        notificationService.notifyUser(
+                userId,
+                "Đơn hàng đã bị hủy",
+                "Đơn hàng " + order.getOrderCode() + " đã được hủy.",
+                "order_cancelled",
+                null
+        );
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("order_status_changed"));
+        return toResponse(order);
     }
 
     @Transactional
@@ -304,7 +341,22 @@ public class OrderServiceImpl implements OrderService {
             order.setPaymentStatus(PaymentStatus.paid);
             order.setPaidAt(Instant.now());
         }
-        return toResponse(orderRepository.save(order));
+        order = orderRepository.save(order);
+        notificationService.notifyAdmins(
+                "Khach da xac nhan nhan hang",
+                "Don hang " + order.getOrderCode() + " da duoc xac nhan da nhan.",
+                "order_received",
+                null
+        );
+        notificationService.notifyUser(
+                userId,
+                "Đã ghi nhận đơn hàng",
+                "Đơn hàng " + order.getOrderCode() + " đã được đánh dấu hoàn thành.",
+                "order_received",
+                null
+        );
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("order_status_changed"));
+        return toResponse(order);
     }
 
     public PageResponse<OrderResponse> adminGetUserOrders(Integer userId, int page, int size) {
@@ -325,7 +377,8 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse adminUpdateStatus(String orderCode, UpdateOrderStatusRequest req) {
         OrderEntity order = orderRepository.findByOrderCode(orderCode)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Don hang khong ton tai"));
-        updateStatus(order, req.status(), null);
+        validateAdminStatusChange(order, req);
+        updateStatus(order, req.status(), adminHistoryNote(req));
         if (req.status() == OrderStatus.confirmed) order.setConfirmedAt(Instant.now());
         if (req.status() == OrderStatus.shipping)  order.setShippingAt(Instant.now());
         if (req.status() == OrderStatus.delivered) order.setDeliveredAt(Instant.now());
@@ -341,13 +394,75 @@ public class OrderServiceImpl implements OrderService {
             order.setCancelReason(req.cancelReason());
             restoreStock(order);
         }
-        return toResponse(orderRepository.save(order));
+        order = orderRepository.save(order);
+        notificationService.notifyUser(
+                order.getUser().getId(),
+                "Cập nhật trạng thái đơn hàng",
+                "Đơn hàng " + order.getOrderCode() + " đã chuyển sang trạng thái " + readableStatus(req.status()) + ".",
+                "order_status",
+                null
+        );
+        realtimeSocketHub.afterCommit(() -> realtimeSocketHub.pushAdminDashboardRefresh("order_status_changed"));
+        return toResponse(order);
     }
 
     private void updateStatus(OrderEntity order, OrderStatus newStatus, String note) {
         historyRepository.save(OrderStatusHistoryEntity.builder()
-                .order(order).fromStatus(order.getStatus()).toStatus(newStatus).note(note).build());
+                .order(order)
+                .fromStatus(order.getStatus())
+                .toStatus(newStatus)
+                .note(note != null && !note.isBlank() ? note : "Cap nhat trang thai")
+                .build());
         order.setStatus(newStatus);
+    }
+
+    private void validateAdminStatusChange(OrderEntity order, UpdateOrderStatusRequest req) {
+        if (req.status() == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST, "Trang thai don hang khong duoc de trong");
+        }
+
+        OrderStatus currentStatus = order.getStatus();
+        if (currentStatus == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST, "Don hang chua co trang thai hop le");
+        }
+        if (currentStatus == OrderStatus.completed || currentStatus == OrderStatus.cancelled) {
+            throw new AppException(ErrorCode.INVALID_REQUEST, "Khong the cap nhat don hang o trang thai nay");
+        }
+
+        if (req.status() == OrderStatus.cancelled && (req.cancelReason() == null || req.cancelReason().isBlank())) {
+            throw new AppException(ErrorCode.INVALID_REQUEST, "Vui long nhap ly do huy don hang");
+        }
+
+        if (!isAllowedAdminTransition(currentStatus, req.status())) {
+            throw new AppException(ErrorCode.INVALID_REQUEST,
+                    "Khong the chuyen don hang tu trang thai " + readableStatus(currentStatus) +
+                            " sang " + readableStatus(req.status()));
+        }
+    }
+
+    private boolean isAllowedAdminTransition(OrderStatus currentStatus, OrderStatus nextStatus) {
+        if (currentStatus == null) {
+            return false;
+        }
+        if (currentStatus == nextStatus) {
+            return true;
+        }
+        return switch (currentStatus) {
+            case pending -> nextStatus == OrderStatus.confirmed || nextStatus == OrderStatus.cancelled;
+            case confirmed -> nextStatus == OrderStatus.shipping || nextStatus == OrderStatus.cancelled;
+            case shipping -> nextStatus == OrderStatus.delivered || nextStatus == OrderStatus.cancelled;
+            case delivered -> nextStatus == OrderStatus.completed || nextStatus == OrderStatus.cancelled;
+            case completed, cancelled -> false;
+        };
+    }
+
+    private String adminHistoryNote(UpdateOrderStatusRequest req) {
+        if (req.status() == OrderStatus.cancelled) {
+            return "Admin huy don hang" + (req.cancelReason() != null && !req.cancelReason().isBlank()
+                    ? ": " + req.cancelReason().trim()
+                    : "");
+        }
+        return "Admin cap nhat sang trang thai " + readableStatus(req.status());
     }
 
     private String paymentLabel(PaymentMethod method) {
@@ -357,6 +472,20 @@ public class OrderServiceImpl implements OrderService {
             case bank_transfer -> "Chuyen khoan";
             case e_wallet -> "Vi dien tu";
             case cod -> "COD";
+        };
+    }
+
+    private String readableStatus(OrderStatus status) {
+        if (status == null) {
+            return "khong xac dinh";
+        }
+        return switch (status) {
+            case pending -> "cho xu ly";
+            case confirmed -> "da xac nhan";
+            case shipping -> "dang giao";
+            case delivered -> "da giao";
+            case completed -> "hoan thanh";
+            case cancelled -> "da huy";
         };
     }
 

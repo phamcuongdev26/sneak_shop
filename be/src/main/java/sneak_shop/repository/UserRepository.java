@@ -9,6 +9,7 @@ import sneak_shop.entity.UserEntity;
 import sneak_shop.enums.UserRole;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<UserEntity, Integer> {
@@ -35,6 +36,8 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
 
     @Query("SELECT u FROM UserEntity u WHERE u.role = :role AND u.deletedAt IS NULL")
     Page<UserEntity> findByRoleActive(@Param("role") UserRole role, Pageable pageable);
+
+    List<UserEntity> findAllByRoleAndDeletedAtIsNull(UserRole role);
 
     @Query("""
             SELECT u FROM UserEntity u

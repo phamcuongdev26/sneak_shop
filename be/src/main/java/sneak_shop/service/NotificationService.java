@@ -8,4 +8,6 @@ public interface NotificationService {
     long countUnread(Integer userId);
     void markRead(Integer userId, Integer notifId);
     void markAllRead(Integer userId);
+    void notifyUser(Integer userId, String title, String body, String type, String imageUrl);
+    void notifyAdmins(String title, String body, String type, String imageUrl);
 }

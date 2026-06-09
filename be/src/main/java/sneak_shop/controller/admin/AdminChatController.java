@@ -7,7 +7,10 @@ import sneak_shop.common.exception.AppException;
 import sneak_shop.common.exception.ErrorCode;
 import sneak_shop.common.response.ApiResponse;
 import sneak_shop.entity.ChatMessageEntity;
+import sneak_shop.entity.OrderEntity;
 import sneak_shop.repository.ChatRepository;
+import sneak_shop.repository.OrderRepository;
+import sneak_shop.websocket.RealtimeSocketHub;
 
 import java.time.Instant;
 import java.util.List;
@@ -50,9 +53,15 @@ public class AdminChatController {
     ) {}
 
     private final ChatRepository chatRepository;
+    private final OrderRepository orderRepository;
+    private final RealtimeSocketHub realtimeSocketHub;
 
-    public AdminChatController(ChatRepository chatRepository) {
+    public AdminChatController(ChatRepository chatRepository,
+                               OrderRepository orderRepository,
+                               RealtimeSocketHub realtimeSocketHub) {
         this.chatRepository = chatRepository;
+        this.orderRepository = orderRepository;
+        this.realtimeSocketHub = realtimeSocketHub;
     }
 
     @GetMapping("/conversations")
@@ -101,7 +110,26 @@ public class AdminChatController {
                 .build();
 
         ChatMessageEntity saved = chatRepository.save(msg);
+        Integer targetUserId = resolveTargetUserId(orderCode);
+        realtimeSocketHub.afterCommit(() -> {
+            if (targetUserId != null) {
+                realtimeSocketHub.pushChatMessageToUser(targetUserId, saved);
+            }
+            realtimeSocketHub.pushChatMessageToAdmins(saved);
+        });
         return ApiResponse.ok("Gui tin nhan thanh cong", ChatMessageResponse.from(saved));
+    }
+
+    private Integer resolveTargetUserId(String orderCode) {
+        if (orderCode != null && orderCode.startsWith("SUPPORT-")) {
+            try {
+                return Integer.valueOf(orderCode.substring("SUPPORT-".length()));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        OrderEntity order = orderRepository.findByOrderCode(orderCode).orElse(null);
+        return order != null ? order.getUser().getId() : null;
     }
 
     @GetMapping("/unread-count")
