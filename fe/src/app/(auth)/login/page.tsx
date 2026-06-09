@@ -13,12 +13,12 @@ export default function LoginPage() {
   const googleOAuthEnabled =
     !!googleClientId && googleClientId !== "YOUR_GOOGLE_CLIENT_ID";
   const [loading, setLoading] = useState(false);
-  const { setAuth, user } = useAuthStore();
+  const { setAuth, user, token } = useAuthStore();
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !token) return;
     window.location.replace(user.role === "admin" ? "/admin" : "/");
-  }, [user]);
+  }, [user, token]);
 
   const handleGoogleSuccess = async (credential: string) => {
     setLoading(true);
