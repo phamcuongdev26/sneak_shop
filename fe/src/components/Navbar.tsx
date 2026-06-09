@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, Loader2, LogOut, Menu, Package, Search, ShoppingBag, User, UserCircle, X } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Loader2, LogOut, Menu, Package, Search, ShoppingBag, User, UserCircle, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useAuthStore } from "@/store/auth";
@@ -428,6 +428,16 @@ export default function Navbar() {
                             <Package className="h-4 w-4 text-gray-400" />
                             Đơn hàng của tôi
                           </Link>
+                          {user.role === "admin" && (
+                            <Link
+                              href="/admin"
+                              className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              onClick={() => setUserHover(false)}
+                            >
+                              <LayoutDashboard className="h-4 w-4 text-gray-400" />
+                              Quản trị
+                            </Link>
+                          )}
                         </div>
                         <div className="border-t border-black/5 py-1">
                           <button
@@ -510,6 +520,11 @@ export default function Navbar() {
                       <Link href="/profile" className="rounded-full border px-4 py-2 text-sm">
                         Tài khoản
                       </Link>
+                      {user.role === "admin" && (
+                        <Link href="/admin" className="rounded-full border px-4 py-2 text-sm">
+                          Quản trị
+                        </Link>
+                      )}
                       <button
                         type="button"
                         onClick={handleLogout}
