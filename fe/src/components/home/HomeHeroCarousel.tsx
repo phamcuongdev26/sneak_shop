@@ -7,12 +7,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Banner } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 
-const fallbackSlides = [
-  "https://images.unsplash.com/photo-1516257984-b1b4d707412e?auto=format&fit=crop&w=1600&q=80",
-  "https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=1600&q=80",
-  "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=1600&q=80",
-];
-
 const slideMeta = [
   { eyebrow: "GIỮA MÙA", headline: "GIẢM GIÁ", discount: "70%" },
   { eyebrow: "BỘ SƯU TẬP MỚI", headline: "RA MẮT", discount: "50%" },
@@ -21,14 +15,11 @@ const slideMeta = [
 
 export default function HomeHeroCarousel({ banners }: { banners: Banner[] }) {
   const slides = useMemo(() => {
-    return Array.from({ length: 3 }, (_, index) => {
-      const banner = banners[index] || banners[index % banners.length];
-      return {
-        id: banner?.id ?? index + 1,
-        imageUrl: banner?.imageUrl || fallbackSlides[index % fallbackSlides.length],
-        ...slideMeta[index % slideMeta.length],
-      };
-    });
+    return banners.slice(0, 3).map((banner, index) => ({
+      id: banner.id,
+      imageUrl: banner.imageUrl,
+      ...slideMeta[index % slideMeta.length],
+    }));
   }, [banners]);
 
   const [current, setCurrent] = useState(0);
@@ -42,6 +33,8 @@ export default function HomeHeroCarousel({ banners }: { banners: Banner[] }) {
   }, [slides.length]);
 
   const active = slides[current] ?? slides[0];
+
+  if (!active) return null;
 
   const goTo = (next: number) => setCurrent((next + slides.length) % slides.length);
 
@@ -117,7 +110,8 @@ export default function HomeHeroCarousel({ banners }: { banners: Banner[] }) {
           <ChevronRight className="h-5 w-5" />
         </Button>
 
-        <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
+        {slides.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2">
           {slides.map((slide, index) => (
             <button
               key={slide.id}
@@ -129,7 +123,8 @@ export default function HomeHeroCarousel({ banners }: { banners: Banner[] }) {
               aria-label={`Chuyển đến slide ${index + 1}`}
             />
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </section>
   );
